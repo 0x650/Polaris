@@ -151,6 +151,20 @@ impl PageTable {
     }
 }
 
+impl AddressSpace {
+    pub fn setup_for_user(&mut self) {
+        let kernel_space = KERNEL_ADDRESS_SPACE
+            .get()
+            .expect("Kernel address space is still not setup??");
+        let kernel_table = kernel_space.lock();
+
+        let from = kernel_table.page_table.top_level();
+        let to = self.page_table.top_level();
+
+        to.entries[256..512].copy_from_slice(&from.entries[256..512]);
+    }
+}
+
 unsafe extern "C" {
     static __start_text: [u8; 0];
     static __stop_text: [u8; 0];

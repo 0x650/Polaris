@@ -10,10 +10,10 @@ mod idt;
 pub mod intr;
 mod mminit;
 pub mod smp;
-
-use bitflags::bitflags;
+mod syscall_entry;
 
 use crate::mm::var::VarProtectionFlags;
+use bitflags::bitflags;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
@@ -43,14 +43,22 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn init_kernel(ip: usize, sp: usize, arg: usize) -> Self {
+    pub fn init(ip: usize, sp: usize, arg: usize, user: bool) -> Self {
         Self {
             rip: ip as u64,
             rsp: sp as u64,
             rdi: arg as u64,
             rflags: 0x202,
-            cs: gdt::SEL_KERNEL_CODE as u64,
-            ss: gdt::SEL_KERNEL_DATA as u64,
+            cs: if user {
+                gdt::SEL_USER_CODE
+            } else {
+                gdt::SEL_KERNEL_CODE
+            } as u64,
+            ss: if user {
+                gdt::SEL_USER_DATA
+            } else {
+                gdt::SEL_KERNEL_DATA
+            } as u64,
             ..Default::default()
         }
     }
@@ -81,6 +89,14 @@ impl Context {
 
     pub fn set_first_arg(&mut self, arg: usize) {
         self.rdi = arg as u64
+    }
+
+    pub fn get_first_arg(&self) -> usize {
+        self.rdi as usize
+    }
+
+    pub fn get_syscall_nr(&self) -> usize {
+        self.rax as usize
     }
 }
 

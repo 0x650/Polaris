@@ -1,6 +1,5 @@
+use crate::{arch::Context, fbcon, locks::spinlock::SpinLock};
 use core::fmt::{Display, Formatter, FormattingOptions};
-
-use crate::{fbcon, locks::spinlock::SpinLock};
 
 pub struct DebugCon;
 
@@ -25,4 +24,15 @@ macro_rules! log {
     ($($args: expr),+ $(,)?) => {
         $crate::log::log(&format_args!($($args),+))
     };
+}
+
+pub fn syscall_log(context: &mut Context) {
+    let string = context.get_first_arg() as *const i8;
+
+    if string.is_null() {
+        return;
+    }
+
+    let c_string = unsafe { core::ffi::CStr::from_ptr(string) };
+    log!("{}", c_string.to_str().unwrap());
 }

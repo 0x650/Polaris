@@ -1,6 +1,7 @@
 use super::apic;
 use super::gdt;
 use super::idt;
+use super::syscall_entry;
 use crate::arch::intr;
 use crate::arch::x86_64::asm;
 use crate::arch::x86_64::asm::interrupt_state;
@@ -26,6 +27,8 @@ const KERNEL_STACKS_COUNT: usize = 4;
 
 pub struct Prcb {
     me: *mut Prcb,
+    pub user_stack: u64,
+    pub kernel_stack: u64,
     pub cpu_id: u32,
     gdt: gdt::CpuGdt,
     kernel_stacks: [KernelStack; KERNEL_STACKS_COUNT],
@@ -39,6 +42,7 @@ unsafe impl Sync for Prcb {}
 impl Prcb {
     pub fn set_kernel_stack(&mut self, kernel_stack: &KernelStack) {
         self.gdt.tss.rsp[0] = kernel_stack.top() as u64;
+        self.kernel_stack = kernel_stack.top() as u64;
     }
 }
 
@@ -92,7 +96,21 @@ unsafe extern "C" fn processor_startup(mp_info: &MpInfo) -> ! {
     idt::load();
 
     unsafe {
+        asm::wrmsr(0xC0000100, 0);
         asm::wrmsr(0xC0000101, mp_info.extra_argument());
+        asm::wrmsr(0xC0000102, mp_info.extra_argument());
+
+        let msr = asm::rdmsr(0xC0000080);
+        asm::wrmsr(0xC0000080, msr | (1 << 0) as u64);
+        asm::wrmsr(
+            0xC0000081,
+            (0x20 - 16) << 48 | (gdt::SEL_KERNEL_CODE as u64) << 32,
+        );
+        asm::wrmsr(
+            0xC0000082,
+            syscall_entry::amd64_syscall_stub as *const () as u64,
+        );
+        asm::wrmsr(0xC0000084, 0);
     }
 
     apic::Lapic::init(prcb.cpu_id as u8);
@@ -118,7 +136,21 @@ fn processor_setup_bsp(prcb: &'static mut Prcb) {
     idt::load();
 
     unsafe {
+        asm::wrmsr(0xC0000100, 0);
         asm::wrmsr(0xC0000101, (prcb as *mut Prcb) as u64);
+        asm::wrmsr(0xC0000102, (prcb as *mut Prcb) as u64);
+
+        let msr = asm::rdmsr(0xC0000080);
+        asm::wrmsr(0xC0000080, msr | (1 << 0) as u64);
+        asm::wrmsr(
+            0xC0000081,
+            (0x20 - 16) << 48 | (gdt::SEL_KERNEL_CODE as u64) << 32,
+        );
+        asm::wrmsr(
+            0xC0000082,
+            syscall_entry::amd64_syscall_stub as *const () as u64,
+        );
+        asm::wrmsr(0xC0000084, 0);
     }
 
     apic::Lapic::init(prcb.cpu_id as u8);
@@ -143,6 +175,8 @@ pub(in crate::arch::x86_64) fn init(mp_request: &MpRespData) {
 
         let mut prcb = Box::new(Prcb {
             me: core::ptr::null_mut(),
+            user_stack: 0,
+            kernel_stack: 0,
             cpu_id: cpu.processor_id,
             gdt: CpuGdt::new(),
             kernel_stacks,
@@ -155,6 +189,7 @@ pub(in crate::arch::x86_64) fn init(mp_request: &MpRespData) {
         prcb_ref.me = prcb_ref as *mut Prcb;
 
         prcb_ref.gdt.tss.rsp[0] = prcb_ref.kernel_stacks[0].top() as u64;
+        prcb_ref.kernel_stack = prcb_ref.kernel_stacks[0].top() as u64;
 
         prcb_ref.gdt.tss.ist[0] = prcb_ref.kernel_stacks[1].top() as u64;
         prcb_ref.gdt.tss.ist[1] = prcb_ref.kernel_stacks[2].top() as u64;

@@ -65,7 +65,33 @@ impl Thread {
             vruntime: AtomicUsize::new(0),
             niceness: AtomicI8::new(0),
             state: SpinLock::new(ThreadState::Ready),
-            context: UnsafeCell::new(Context::init_kernel(entry as usize, sp, arg)),
+            context: UnsafeCell::new(Context::init(entry as usize, sp, arg, false)),
+            last_scheduled_at: AtomicUsize::new(0),
+            kernel_stack,
+            wait_state: SpinLock::new(WaitState {
+                waiting_on_all: false,
+                waiting_objects: Vec::new(),
+                wait_time_out: 0,
+            }),
+            mother_proc: mother_proc.clone(),
+            queued: AtomicBool::new(false),
+            link: RBTreeLink::new(),
+        });
+
+        mother_proc.add_thread(thread.clone());
+
+        Some(thread.clone())
+    }
+
+    pub fn new(ip: usize, sp: usize, arg: usize, mother_proc: Arc<Process>) -> Option<Arc<Self>> {
+        let kernel_stack = KernelStack::new()?;
+
+        let thread = Arc::new(Self {
+            id: CURRENT_THREAD_ID.fetch_add(1, Ordering::SeqCst),
+            vruntime: AtomicUsize::new(0),
+            niceness: AtomicI8::new(0),
+            state: SpinLock::new(ThreadState::Ready),
+            context: UnsafeCell::new(Context::init(ip, sp, arg, true)),
             last_scheduled_at: AtomicUsize::new(0),
             kernel_stack,
             wait_state: SpinLock::new(WaitState {
