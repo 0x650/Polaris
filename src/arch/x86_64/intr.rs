@@ -1,7 +1,9 @@
 use super::Context;
 use super::asm;
 use super::smp;
+use crate::mm::fault;
 use crate::sched::sched;
+use core::arch::{asm, global_asm};
 use seq_macro;
 
 pub unsafe fn enable_interrupts() {
@@ -132,10 +134,16 @@ pub unsafe extern "C" fn idt_handler(context: *mut Context) {
 
     match isr {
         0x00..0x1F => {
-            panic!(
-                "Unhandled exception {}: {:#x?}\r\n{:?}\r\n",
-                isr, context.error, context
-            );
+            if isr == 0x0E {
+                let mut cr2: usize;
+                unsafe { asm!("mov {cr2}, cr2", cr2 = out(reg) cr2) };
+                fault::handle_fault(cr2 as u64);
+            } else {
+                panic!(
+                    "Unhandled exception {}: {:#x?}\r\n{:?}\r\n",
+                    isr, context.error, context
+                );
+            }
         }
         0x20 => {
             let next = sched::schedule(*context);

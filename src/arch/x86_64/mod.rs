@@ -13,6 +13,8 @@ pub mod smp;
 
 use bitflags::bitflags;
 
+use crate::mm::var::VarProtectionFlags;
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Context {
@@ -90,7 +92,7 @@ pub const BIG_ALLOC_START: u64 = PFN_DATABASE + (1 << 40);
 pub const STACK_ALLOCATIONS_START: u64 = PFN_DATABASE + (2 << 40);
 
 bitflags! {
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, Eq, PartialEq)]
     pub struct PteFlags: u64 {
         const PRESENT     = 1 << 0;
         const WRITABLE    = 1 << 1;
@@ -98,6 +100,20 @@ bitflags! {
         const HUGE        = 1 << 7;
         const NO_EXECUTE  = 1 << 63;
     }
+}
+
+pub fn prot_to_pte_flags(flags: VarProtectionFlags) -> PteFlags {
+    let mut pte_flags = PteFlags::USER;
+    if flags.contains(VarProtectionFlags::READ) {
+        pte_flags |= PteFlags::PRESENT;
+    }
+    if flags.contains(VarProtectionFlags::WRITE) {
+        pte_flags |= PteFlags::WRITABLE;
+    }
+    if !flags.contains(VarProtectionFlags::EXECUTE) {
+        pte_flags |= PteFlags::NO_EXECUTE;
+    }
+    pte_flags
 }
 
 pub fn request_yield() {

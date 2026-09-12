@@ -8,6 +8,7 @@ pub enum PageUsage {
     PageTable,
     KernelHeap,
     KernelStack,
+    Anon,
 }
 
 pub struct Page {

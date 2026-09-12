@@ -14,7 +14,9 @@ mod object;
 mod sched;
 
 use crate::{
+    arch::PAGE_SIZE,
     locks::mutex::Mutex,
+    mm::var::{VarFlags, VarProtectionFlags},
     object::handle::Handle,
     sched::{
         dispatch::{DispatcherObject, Event},
@@ -33,57 +35,33 @@ unsafe extern "C" fn _start() {
     arch::entry::arch_entry();
 }
 
-extern "C" fn another_thread(arg: usize) -> ! {
-    log!("Hello from another thread!\r\n");
-
-    let dispatcher_object = arch::get_running_thread()
-        .unwrap()
-        .mother_proc
-        .handle_table
-        .lock()
-        .get(arg)
-        .expect("We should've gotten a handle??")
-        .get();
-
-    let event: Arc<Event> = dispatcher_object.as_event().unwrap();
-
-    event.trigger(true);
-
-    log!("Triggered the event!\r\n");
-
-    arch::get_running_thread().unwrap().terminate();
-    unreachable!()
-}
-
 extern "C" fn init_thread(_: usize) -> ! {
     log!("Hello from kernel init thread!\r\n");
+    let running_thread = arch::get_running_thread().unwrap();
 
-    let event = Arc::new(Event::new());
-    let devent: Arc<DispatcherObject> = Arc::new(event.clone().into());
-    let handle = Handle::new(devent.clone());
-
-    let handle_id = arch::get_running_thread()
-        .unwrap()
+    const RANDOM_ADDRESS: u64 = 0xFFFFE00000000000;
+    running_thread
         .mother_proc
-        .handle_table
+        .address_space
         .lock()
-        .insert(handle);
+        .insert_var_range(
+            RANDOM_ADDRESS,
+            PAGE_SIZE,
+            VarProtectionFlags::READ | VarProtectionFlags::WRITE,
+            VarFlags::ANON,
+        );
 
-    sched::sched::enqueue_thread(
-        Thread::new_kernel(
-            another_thread,
-            handle_id,
-            arch::get_running_thread().unwrap().mother_proc.clone(),
-        )
-        .unwrap(),
-    );
-
-    log!("Waiting on event to be triggered\r\n");
-    event.trigger(false);
-
-    sched::dispatch::wait_on_single_object(devent.clone(), usize::MAX);
-
-    log!("The event was triggered!\r\n");
+    let funny_string = "Very funny";
+    unsafe {
+        let funny: &mut [u8] =
+            core::slice::from_raw_parts_mut(RANDOM_ADDRESS as *mut u8, PAGE_SIZE);
+        funny[..funny_string.len()].copy_from_slice(funny_string.as_bytes());
+        log!(
+            "Reading {:p}: {}\r\n",
+            funny.as_ptr(),
+            core::str::from_utf8(&funny[..funny_string.len()]).unwrap()
+        );
+    }
 
     loop {}
 }
