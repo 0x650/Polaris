@@ -1,9 +1,13 @@
 use super::Context;
+use super::apic;
 use super::asm;
 use super::smp;
 use crate::mm::fault;
 use crate::sched::sched;
+use core::arch::naked_asm;
 use core::arch::{asm, global_asm};
+use core::mem::offset_of;
+use core::sync::atomic::{AtomicBool, Ordering};
 use seq_macro;
 
 pub unsafe fn enable_interrupts() {
@@ -29,8 +33,6 @@ pub unsafe fn toggle_interrupts(state: bool) -> bool {
         return asm::toggle_interrupts(state);
     }
 }
-
-use core::arch::naked_asm;
 
 seq_macro::seq!(N in 0..256 {
     #[unsafe(naked)]
@@ -68,9 +70,14 @@ unsafe extern "C" fn interrupt_stub_internal() {
         "push r15",
         "cld",
         "xor rbp, rbp",
+        "test byte ptr [rsp + {cs_off}], 3",
+        "jz 1f",
+        "swapgs",
+        "1:",
         "mov rdi, rsp",
         "call {handler}",
         "jmp {ret}",
+        cs_off = const offset_of!(Context, cs),
         handler = sym idt_handler,
         ret = sym interrupt_return,
     );
@@ -95,6 +102,10 @@ pub unsafe extern "C" fn interrupt_return() {
         "pop rbx",
         "pop rax",
         "add rsp, 0x10",
+        "test byte ptr [rsp + 8], 3",
+        "jz 1f",
+        "swapgs",
+        "1:",
         "iretq",
     );
 }
@@ -119,11 +130,15 @@ pub unsafe extern "C" fn load_context(context: &Context) {
         "pop rbx",
         "pop rax",
         "add rsp, 0x10",
+        "test byte ptr [rsp + 8], 3",
+        "jz 1f",
+        "swapgs",
+        "1:",
         "iretq",
     );
 }
 
-use super::apic;
+pub static MANUALLY_INITIATED_NMI: AtomicBool = AtomicBool::new(false);
 
 pub unsafe extern "C" fn idt_handler(context: *mut Context) {
     let context = unsafe { &mut *context };
@@ -138,6 +153,8 @@ pub unsafe extern "C" fn idt_handler(context: *mut Context) {
                 let mut cr2: usize;
                 unsafe { asm!("mov {cr2}, cr2", cr2 = out(reg) cr2) };
                 fault::handle_fault(cr2 as u64);
+            } else if (MANUALLY_INITIATED_NMI.load(Ordering::Relaxed)) && isr == 0x02 {
+                asm::halt_forever();
             } else {
                 panic!(
                     "Unhandled exception {}: {:#x?}\r\n{:?}\r\n",

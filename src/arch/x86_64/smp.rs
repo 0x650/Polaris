@@ -3,6 +3,7 @@ use super::gdt;
 use super::idt;
 use super::syscall_entry;
 use crate::arch::intr;
+use crate::arch::x86_64::apic::Lapic;
 use crate::arch::x86_64::asm;
 use crate::arch::x86_64::asm::interrupt_state;
 use crate::arch::x86_64::gdt::CpuGdt;
@@ -74,6 +75,17 @@ pub fn get_running_thread() -> Option<&'static Thread> {
     running_thread
 }
 
+pub fn halt_other_processors() {
+    if PROCESSOR_COUNT.load(Ordering::Relaxed) == 0 {
+        return;
+    }
+
+    intr::MANUALLY_INITIATED_NMI.store(true, Ordering::SeqCst);
+    let icr: u64 = (0b100) << 8 | (0b11) << 18;
+    Lapic::write(0x300, icr as u32);
+    Lapic::write(0x310, (icr >> 32) as u32);
+}
+
 fn register_processor(prcb: &'static Prcb) {
     let mut processors = PROCESSORS.lock();
     processors[prcb.cpu_id as usize] = Some(prcb);
@@ -98,7 +110,7 @@ unsafe extern "C" fn processor_startup(mp_info: &MpInfo) -> ! {
     unsafe {
         asm::wrmsr(0xC0000100, 0);
         asm::wrmsr(0xC0000101, mp_info.extra_argument());
-        asm::wrmsr(0xC0000102, mp_info.extra_argument());
+        //asm::wrmsr(0xC0000102, mp_info.extra_argument());
 
         let msr = asm::rdmsr(0xC0000080);
         asm::wrmsr(0xC0000080, msr | (1 << 0) as u64);
@@ -138,7 +150,7 @@ fn processor_setup_bsp(prcb: &'static mut Prcb) {
     unsafe {
         asm::wrmsr(0xC0000100, 0);
         asm::wrmsr(0xC0000101, (prcb as *mut Prcb) as u64);
-        asm::wrmsr(0xC0000102, (prcb as *mut Prcb) as u64);
+        //asm::wrmsr(0xC0000102, (prcb as *mut Prcb) as u64);
 
         let msr = asm::rdmsr(0xC0000080);
         asm::wrmsr(0xC0000080, msr | (1 << 0) as u64);

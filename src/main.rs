@@ -24,6 +24,7 @@ use crate::{
     object::handle::Handle,
     sched::{
         dispatch::{DispatcherObject, Event},
+        process::kernel_process,
         thread::Thread,
     },
 };
@@ -77,7 +78,7 @@ extern "C" fn init_thread(_: usize) -> ! {
             0x48, 0x8d, 0x3d, 0x04, 0x00, 0x00, 0x00, // lea rdi, [rip + 4]
             0x0f, 0x05, // syscall
             0xeb, 0xfe, // jmp $
-            b'H', b'e', b'l', b'l', b'o', b' ', b'f', b'r', b'o', b'm', b' ', b'U', b's', b'e',
+            b'H', b'e', b'l', b'l', b'o', b' ', b'f', b'r', b'o', b'm', b' ', b'u', b's', b'e',
             b'r', b's', b'p', b'a', b'c', b'e', b'!', b'\r', b'\n', 0x00,
         ];
 
@@ -97,6 +98,7 @@ extern "C" fn init_thread(_: usize) -> ! {
 
 #[panic_handler]
 fn panic_handler(info: &PanicInfo) -> ! {
+    arch::halt_other_processors();
     log!("*** PANIC!\r\n");
     if let Some(loc) = info.location() {
         log!("PANIC: {}:{}: ", loc.file(), loc.line());
