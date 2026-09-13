@@ -4,3 +4,4 @@ mod slab;
 pub mod stack;
 pub mod var;
 pub mod virt;
+pub mod vmb;

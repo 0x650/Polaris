@@ -1,7 +1,7 @@
-use super::var;
+use super::var::{self, Var, VarProtectionFlags};
+use super::vmb::{self, Vmb, VmbBacking};
 use crate::arch::*;
 use crate::locks::spinlock::SpinLock;
-use crate::mm::var::{Var, VarFlags, VarProtectionFlags};
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use core::sync::atomic::AtomicU64;
@@ -52,7 +52,7 @@ impl AddressSpace {
         addr: u64,
         length: usize,
         protections: VarProtectionFlags,
-        flags: VarFlags,
+        vmb: Arc<Vmb>,
     ) -> bool {
         let base = align_down(addr, PAGE_SIZE as u64);
         let len = align_up(length as u64, PAGE_SIZE as u64) as usize;
@@ -71,7 +71,7 @@ impl AddressSpace {
         }
 
         self.vars
-            .insert(base, Var::new(base, len, protections, flags));
+            .insert(base, Var::new(base, len, protections, vmb));
         true
     }
 
@@ -88,9 +88,9 @@ impl AddressSpace {
         let length = align_up(length as u64, PAGE_SIZE as u64) as usize;
         let end = addr + length as u64;
 
-        let Some((var_base, var_len, protections, flags)) = self
+        let Some((var_base, var_len, protections, vmb)) = self
             .get_var_range(addr)
-            .map(|v| (v.base_address, v.length, v.protections, v.flags))
+            .map(|v| (v.base_address, v.length, v.protections, v.vmb.clone()))
         else {
             return false;
         };
@@ -105,14 +105,19 @@ impl AddressSpace {
         if var_base < addr {
             self.vars.insert(
                 var_base,
-                Var::new(var_base, (addr - var_base) as usize, protections, flags),
+                Var::new(
+                    var_base,
+                    (addr - var_base) as usize,
+                    protections,
+                    vmb.clone(),
+                ),
             );
         }
 
         if end < var_end {
             self.vars.insert(
                 end,
-                Var::new(end, (var_end - end) as usize, protections, flags),
+                Var::new(end, (var_end - end) as usize, protections, vmb.clone()),
             );
         }
 
@@ -129,9 +134,9 @@ impl AddressSpace {
         let length = align_up(length as u64, PAGE_SIZE as u64) as usize;
         let end = addr + length as u64;
 
-        let Some((var_base, var_len, old_protections, flags)) = self
+        let Some((var_base, var_len, old_protections, vmb)) = self
             .get_var_range(addr)
-            .map(|v| (v.base_address, v.length, v.protections, v.flags))
+            .map(|v| (v.base_address, v.length, v.protections, v.vmb.clone()))
         else {
             return false;
         };
@@ -146,15 +151,20 @@ impl AddressSpace {
         if var_base < addr {
             self.vars.insert(
                 var_base,
-                Var::new(var_base, (addr - var_base) as usize, old_protections, flags),
+                Var::new(
+                    var_base,
+                    (addr - var_base) as usize,
+                    old_protections,
+                    vmb.clone(),
+                ),
             );
         }
         self.vars
-            .insert(addr, Var::new(addr, length, protections, flags));
+            .insert(addr, Var::new(addr, length, protections, vmb.clone()));
         if end < var_end {
             self.vars.insert(
                 end,
-                Var::new(end, (var_end - end) as usize, old_protections, flags),
+                Var::new(end, (var_end - end) as usize, old_protections, vmb.clone()),
             );
         }
 

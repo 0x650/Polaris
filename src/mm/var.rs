@@ -1,3 +1,5 @@
+use super::vmb::Vmb;
+use alloc::sync::Arc;
 use bitflags::bitflags;
 
 bitflags! {
@@ -9,27 +11,20 @@ bitflags! {
     }
 }
 
-bitflags! {
-    #[derive(Clone, Copy, Eq, PartialEq)]
-    pub struct VarFlags: i32 {
-        const ANON     = 1 << 0;
-    }
-}
-
 pub struct Var {
     pub base_address: u64,
     pub length: usize,
     pub protections: VarProtectionFlags,
-    pub flags: VarFlags,
+    pub vmb: Arc<Vmb>,
 }
 
 impl Var {
-    pub fn new(base: u64, length: usize, protections: VarProtectionFlags, flags: VarFlags) -> Self {
+    pub fn new(base: u64, length: usize, protections: VarProtectionFlags, vmb: Arc<Vmb>) -> Self {
         Self {
             base_address: base,
             length,
             protections,
-            flags,
+            vmb,
         }
     }
 }
