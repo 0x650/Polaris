@@ -13,6 +13,7 @@ mod log;
 mod mm;
 mod object;
 mod sched;
+mod status_codes;
 mod syscall;
 
 use spin::Once;

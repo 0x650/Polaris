@@ -1,5 +1,6 @@
 use crate::arch::Context;
 use crate::log;
+use crate::status_codes::PxStatus;
 
 pub fn dispatch(context: &mut Context) {
     let handler: fn(&mut Context) = match context.get_syscall_nr() {
@@ -7,7 +8,7 @@ pub fn dispatch(context: &mut Context) {
 
         n => {
             log!("Unknown syscall {n}");
-            context.set_ret(67);
+            context.set_ret(PxStatus::InvalidArguments as usize);
             return;
         }
     };

@@ -7,14 +7,15 @@ use crate::mm::phys::*;
 use crate::mm::vmb;
 use crate::sched::process;
 use crate::sched::thread;
+use crate::status_codes::PxStatus;
 
 fn align_down(x: u64, a: u64) -> u64 {
     x & !(a - 1)
 }
 
-pub fn handle_fault(faulting_address: u64) {
+pub fn handle_fault(faulting_address: u64) -> PxStatus {
     let Some(running_thread) = arch::get_running_thread() else {
-        panic!("Page fault at {:p}", faulting_address as *const ());
+        return PxStatus::Unsuccessful;
     };
 
     let addr_space = running_thread.mother_proc.address_space.clone();
@@ -24,12 +25,19 @@ pub fn handle_fault(faulting_address: u64) {
         .get_var_range(faulting_address)
         .map(|var| (var.base_address, var.protections, var.vmb.clone()))
     else {
-        panic!("Page fault at {:p}", faulting_address as *const ());
+        return PxStatus::NotFound;
+    };
+
+    let page = match vmb.get_page((faulting_address - base_address) as usize) {
+        Ok(p) => p,
+        Err(status) => return status,
     };
 
     addr_space.map(
         align_down(faulting_address, PAGE_SIZE as u64),
-        vmb.get_page((faulting_address - base_address) as usize),
+        page,
         arch::prot_to_pte_flags(protections),
     );
+
+    PxStatus::Success
 }

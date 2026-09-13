@@ -2,6 +2,7 @@ use super::var::{self, Var, VarProtectionFlags};
 use super::vmb::{self, Vmb, VmbBacking};
 use crate::arch::*;
 use crate::locks::spinlock::SpinLock;
+use crate::status_codes::PxStatus;
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use core::sync::atomic::AtomicU64;
@@ -53,26 +54,27 @@ impl AddressSpace {
         length: usize,
         protections: VarProtectionFlags,
         vmb: Arc<Vmb>,
-    ) -> bool {
+    ) -> PxStatus {
         let base = align_down(addr, PAGE_SIZE as u64);
         let len = align_up(length as u64, PAGE_SIZE as u64) as usize;
         let end = base + len as u64;
 
         if let Some((&prev_base, prev_var)) = self.vars.range(..base).next_back() {
             if prev_base + prev_var.length as u64 > base {
-                return false;
+                return PxStatus::InvalidRange;
             }
         }
 
         if let Some((&next_base, _)) = self.vars.range(base..).next() {
             if next_base < end {
-                return false;
+                return PxStatus::AlreadyExists;
             }
         }
 
         self.vars
             .insert(base, Var::new(base, len, protections, vmb));
-        true
+
+        PxStatus::Success
     }
 
     pub fn get_var_range(&mut self, addr: u64) -> Option<&mut Var> {
@@ -83,7 +85,7 @@ impl AddressSpace {
             .map(|(_, var)| var)
     }
 
-    pub fn remove_var_range(&mut self, addr: u64, length: usize) -> bool {
+    pub fn remove_var_range(&mut self, addr: u64, length: usize) -> PxStatus {
         let addr = align_down(addr, PAGE_SIZE as u64);
         let length = align_up(length as u64, PAGE_SIZE as u64) as usize;
         let end = addr + length as u64;
@@ -92,12 +94,12 @@ impl AddressSpace {
             .get_var_range(addr)
             .map(|v| (v.base_address, v.length, v.protections, v.vmb.clone()))
         else {
-            return false;
+            return PxStatus::NotFound;
         };
         let var_end = var_base + var_len as u64;
 
         if end > var_end {
-            return false;
+            return PxStatus::InvalidRange;
         }
 
         self.vars.remove(&var_base);
@@ -121,7 +123,7 @@ impl AddressSpace {
             );
         }
 
-        true
+        PxStatus::Success
     }
 
     pub fn remap_var_range(
@@ -129,7 +131,7 @@ impl AddressSpace {
         addr: u64,
         length: usize,
         protections: VarProtectionFlags,
-    ) -> bool {
+    ) -> PxStatus {
         let addr = align_down(addr, PAGE_SIZE as u64);
         let length = align_up(length as u64, PAGE_SIZE as u64) as usize;
         let end = addr + length as u64;
@@ -138,12 +140,12 @@ impl AddressSpace {
             .get_var_range(addr)
             .map(|v| (v.base_address, v.length, v.protections, v.vmb.clone()))
         else {
-            return false;
+            return PxStatus::NotFound;
         };
         let var_end = var_base + var_len as u64;
 
         if end > var_end {
-            return false;
+            return PxStatus::InvalidRange;
         }
 
         self.vars.remove(&var_base);
@@ -168,6 +170,6 @@ impl AddressSpace {
             );
         }
 
-        true
+        PxStatus::Success
     }
 }

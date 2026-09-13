@@ -1,8 +1,9 @@
-use alloc::collections::BTreeMap;
-
 use super::phys::{self, PMM, PageUsage};
 use crate::arch::{PAGE_SHIFT, PAGE_SIZE};
 use crate::locks::spinlock::SpinLock;
+use crate::status_codes::PxStatus;
+use alloc::collections::BTreeMap;
+use core::result::Result;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum VmbBacking {
@@ -29,9 +30,9 @@ impl Vmb {
         }
     }
 
-    pub fn get_page(&self, off: usize) -> u64 {
+    pub fn get_page(&self, off: usize) -> Result<u64, PxStatus> {
         if off > self.size {
-            return u64::MAX;
+            return Err(PxStatus::InvalidRange);
         }
 
         let indx = off >> PAGE_SHIFT;
@@ -42,15 +43,16 @@ impl Vmb {
 
         let mut pages = self.pages.lock();
         if let Some(page) = pages.get(&indx) {
-            return *page;
+            return Ok(*page);
         }
 
         let mut pmm = PMM.lock();
-        let page = pmm.as_mut().unwrap().alloc(PageUsage::Anon).unwrap();
+        if let Some(page) = pmm.as_mut().unwrap().alloc(PageUsage::Anon) {
+            pages.insert(indx, page);
+            return Ok(page);
+        }
 
-        pages.insert(indx, page);
-
-        page
+        Err(PxStatus::FailedToAllocate)
     }
 }
 

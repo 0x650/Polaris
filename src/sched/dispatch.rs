@@ -3,7 +3,9 @@ use super::sched;
 use super::thread::{Thread, ThreadState};
 use crate::arch;
 use crate::locks::mutex::KMutex;
+use crate::status_codes::PxStatus;
 use alloc::sync::Arc;
+use core::result::Result;
 use core::sync::atomic::{AtomicBool, Ordering};
 use enum_dispatch::enum_dispatch;
 
@@ -78,12 +80,12 @@ impl DispatcherObject {
     }
 }
 
-pub fn wait_on_single_object(object: Arc<DispatcherObject>, timeout: usize) -> bool {
+pub fn wait_on_single_object(object: Arc<DispatcherObject>, timeout: usize) -> PxStatus {
     let running_thread =
         arch::get_running_thread().expect("wait_on_single_object called with no thread running??");
 
     if object.test() {
-        return true;
+        return PxStatus::Success;
     }
 
     {
@@ -100,20 +102,24 @@ pub fn wait_on_single_object(object: Arc<DispatcherObject>, timeout: usize) -> b
 
     running_thread.wait_state.lock().waiting_objects.clear();
 
-    object.test()
+    if object.test() {
+        return PxStatus::Success;
+    }
+
+    PxStatus::TimedOut
 }
 
 pub fn wait_on_multiple_objects(
     objects: &[Arc<DispatcherObject>],
     wait_all: bool,
     timeout: usize,
-) -> Option<Arc<DispatcherObject>> {
+) -> Result<Arc<DispatcherObject>, PxStatus> {
     let running_thread = arch::get_running_thread()
         .expect("wait_on_multiple_objects called with no thread running??");
 
     for object in objects {
         if object.test() && !wait_all {
-            return Some(object.clone());
+            return Ok(object.clone());
         }
     }
 
@@ -135,5 +141,10 @@ pub fn wait_on_multiple_objects(
 
     running_thread.wait_state.lock().waiting_objects.clear();
 
-    object
+    let obj = match object {
+        Some(o) => o,
+        None => return Err(PxStatus::TimedOut),
+    };
+
+    Ok(obj)
 }
