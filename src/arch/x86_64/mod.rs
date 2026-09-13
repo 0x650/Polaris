@@ -14,9 +14,10 @@ mod syscall_entry;
 
 use crate::mm::var::VarProtectionFlags;
 use bitflags::bitflags;
+use core::fmt::Write;
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Clone, Copy, Default)]
 pub struct Context {
     pub r15: u64,
     pub r14: u64,
@@ -97,6 +98,34 @@ impl Context {
 
     pub fn get_syscall_nr(&self) -> usize {
         self.rax as usize
+    }
+}
+
+impl core::fmt::Debug for Context {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_char('\r')?;
+        f.write_char('\n')?;
+        f.write_fmt(format_args!(
+            "RAX: {:016x} RBX: {:016x} RCX: {:016x} RDX: {:016x}\r\n",
+            self.rax, self.rbx, self.rcx, self.rdx
+        ))?;
+        f.write_fmt(format_args!(
+            "RBP: {:016x} RDI: {:016x} RSI: {:016x} R8 : {:016x}\r\n",
+            self.rbp, self.rdi, self.rsi, self.r8
+        ))?;
+        f.write_fmt(format_args!(
+            "R9 : {:016x} R10: {:016x} R11: {:016x} R12: {:016x}\r\n",
+            self.r9, self.r10, self.r11, self.r12,
+        ))?;
+        f.write_fmt(format_args!(
+            "R13: {:016x} R14: {:016x} R15: {:016x} RFL: {:016x}\r\n",
+            self.r13, self.r14, self.r15, self.rflags
+        ))?;
+        f.write_fmt(format_args!(
+            "RSP: {:016x} RIP: {:016x} CS : {:016x} SS : {:016x}",
+            self.rsp, self.rip, self.cs, self.ss
+        ))?;
+        Ok(())
     }
 }
 

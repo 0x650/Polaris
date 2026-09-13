@@ -1,7 +1,7 @@
 use super::phys::{self, PMM, PageUsage};
 use crate::arch::{PAGE_SHIFT, PAGE_SIZE};
 use crate::locks::spinlock::SpinLock;
-use crate::status_codes::PxStatus;
+use crate::status_codes::{PxResult, PxStatus};
 use alloc::collections::BTreeMap;
 use core::result::Result;
 
@@ -30,7 +30,7 @@ impl Vmb {
         }
     }
 
-    pub fn get_page(&self, off: usize) -> Result<u64, PxStatus> {
+    pub fn get_page(&self, off: usize) -> PxResult<u64> {
         if off > self.size {
             return Err(PxStatus::InvalidRange);
         }

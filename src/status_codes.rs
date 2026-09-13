@@ -1,3 +1,5 @@
+use core::result::Result;
+
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PxStatus {
@@ -11,3 +13,5 @@ pub enum PxStatus {
     NotSupported = -7,
     TimedOut = -8,
 }
+
+pub type PxResult<T> = Result<T, PxStatus>;

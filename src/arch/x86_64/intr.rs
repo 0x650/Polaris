@@ -4,6 +4,7 @@ use super::asm;
 use super::smp;
 use crate::mm::fault;
 use crate::sched::sched;
+use crate::status_codes::PxStatus;
 use core::arch::naked_asm;
 use core::arch::{asm, global_asm};
 use core::mem::offset_of;
@@ -140,6 +141,26 @@ pub unsafe extern "C" fn load_context(context: &Context) {
 
 pub static MANUALLY_INITIATED_NMI: AtomicBool = AtomicBool::new(false);
 
+fn page_fault_handler(context: &mut Context) {
+    let mut cr2: usize;
+    unsafe { asm!("mov {cr2}, cr2", cr2 = out(reg) cr2) };
+    let status = fault::handle_fault(cr2 as u64);
+    let err = context.error;
+
+    if status != PxStatus::Success {
+        panic!(
+            "Page fault at {:p} [{}:{}:{}:{}]. Failed to handle with {:?}.\r\n{:?}\r\n",
+            cr2 as *const (),
+            if err & (1 << 0) != 0 { "P" } else { "NP" },
+            if err & (1 << 1) != 0 { "W" } else { "R" },
+            if err & (1 << 2) != 0 { "U" } else { "S" },
+            if err & (1 << 4) != 0 { "X" } else { "NX" },
+            status,
+            context
+        );
+    }
+}
+
 pub unsafe extern "C" fn idt_handler(context: *mut Context) {
     let context = unsafe { &mut *context };
     let isr = context.isr as u8;
@@ -148,19 +169,20 @@ pub unsafe extern "C" fn idt_handler(context: *mut Context) {
     let mut prcb = unsafe { &mut *prcb };
 
     match isr {
-        0x00..0x1F => {
-            if isr == 0x0E {
-                let mut cr2: usize;
-                unsafe { asm!("mov {cr2}, cr2", cr2 = out(reg) cr2) };
-                fault::handle_fault(cr2 as u64);
-            } else if (MANUALLY_INITIATED_NMI.load(Ordering::Relaxed)) && isr == 0x02 {
+        0x0E => {
+            page_fault_handler(context);
+        }
+        0x02 => {
+            if (MANUALLY_INITIATED_NMI.load(Ordering::Relaxed)) {
                 asm::halt_forever();
-            } else {
-                panic!(
-                    "Unhandled exception {}: {:#x?}\r\n{:?}\r\n",
-                    isr, context.error, context
-                );
             }
+            panic!("Unexpected NMI!\r\n{:?}\r\n", context);
+        }
+        0x00..0x1F => {
+            panic!(
+                "Unhandled exception {}: {:#x?}\r\n{:?}\r\n",
+                isr, context.error, context
+            );
         }
         0x20 => {
             let next = sched::schedule(*context);
