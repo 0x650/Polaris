@@ -15,6 +15,7 @@ mod object;
 mod sched;
 mod status_codes;
 mod syscall;
+mod ipc;
 
 use spin::Once;
 
@@ -25,41 +26,52 @@ use mm::var::VarProtectionFlags;
 use mm::vmb::Vmb;
 use mm::vmb::VmbBacking;
 
+use sched::thread::Thread;
+
+use crate::ipc::channels::Channel;
+
 #[unsafe(no_mangle)]
 unsafe extern "C" fn _start() {
     arch::entry::arch_entry();
 }
 
+extern "C" fn yet_another_thread(raw_ptr: usize) -> ! {
+    log!("Hello I am yet another thread going to listen on the channel\r\n");
+
+    unsafe {
+        let this: Arc<Channel> = Arc::from_raw(raw_ptr as *const Channel);
+
+        let mut buffer: [u8; 1024] = [0; 1024];
+        let res = this.receive(&mut buffer);
+        let length = res.unwrap();
+
+        let funny = str::from_utf8(&buffer[..length]).unwrap();
+
+        log!("Received {}!\r\n", funny);
+    }
+
+    loop {}
+}
+
 extern "C" fn init_thread(_: usize) -> ! {
     log!("Hello from kernel init thread!\r\n");
 
-    let vmb = Arc::new(Vmb::new(arch::PAGE_SIZE, VmbBacking::Anon));
+    let mut channel = Channel::new_pair();
 
-    let running_thread = arch::get_running_thread().unwrap();
+    let mut this = channel.0;
 
-    const RANDOM_ADDRESS: u64 = 0xFFFFE00000000000;
-    running_thread
-        .mother_proc
-        .address_space
-        .lock()
-        .insert_var_range(
-            RANDOM_ADDRESS,
-            arch::PAGE_SIZE,
-            VarProtectionFlags::READ | VarProtectionFlags::WRITE,
-            vmb.clone(),
-        );
+    sched::sched::enqueue_thread(
+        Thread::new_kernel(
+            yet_another_thread,
+            Arc::into_raw(channel.1) as usize,
+            arch::get_running_thread().unwrap().mother_proc.clone(),
+        )
+        .unwrap(),
+    );
 
-    let wawa_string = "Wawawawa I love kiwawa wawawawa";
-    unsafe {
-        let wawa: &mut [u8] =
-            core::slice::from_raw_parts_mut(RANDOM_ADDRESS as *mut u8, arch::PAGE_SIZE);
-        wawa[..wawa_string.len()].copy_from_slice(wawa_string.as_bytes());
-        log!(
-            "Reading {:p}: {}\r\n",
-            wawa.as_ptr(),
-            core::str::from_utf8(&wawa[..wawa_string.len()]).unwrap()
-        );
-    }
+    sched::sched::yield_execution();
+
+    this.send("Hello from init thread!".as_bytes());
 
     loop {}
 }

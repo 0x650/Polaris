@@ -12,6 +12,8 @@ pub enum PxStatus {
     InvalidArguments = -6,
     NotSupported = -7,
     TimedOut = -8,
+    PeerClosed = -9,
+    ShouldWait = -10,
 }
 
 pub type PxResult<T> = Result<T, PxStatus>;

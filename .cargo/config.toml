@@ -1,5 +1,5 @@
 [env]
-CFLAGS_x86_64_kernel = "-ffreestanding -fno-builtin -mno-red-zone -mgeneral-regs-only -fno-stack-protector"
+CFLAGS_x86_64_kernel = "-mcmodel=kernel -ffreestanding -fno-builtin -mno-red-zone -mgeneral-regs-only -fno-stack-protector"
 
 [target.x86_64-kernel]
 rustflags = [
