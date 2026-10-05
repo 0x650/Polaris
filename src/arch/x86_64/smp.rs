@@ -116,13 +116,13 @@ unsafe extern "C" fn processor_startup(mp_info: &MpInfo) -> ! {
         asm::wrmsr(0xC0000080, msr | (1 << 0) as u64);
         asm::wrmsr(
             0xC0000081,
-            (0x20 - 16) << 48 | (gdt::SEL_KERNEL_CODE as u64) << 32,
+            (0x23 - 16) << 48 | (gdt::SEL_KERNEL_CODE as u64) << 32,
         );
         asm::wrmsr(
             0xC0000082,
             syscall_entry::amd64_syscall_stub as *const () as u64,
         );
-        asm::wrmsr(0xC0000084, 0);
+        asm::wrmsr(0xC0000084, 0xfffffffd);
     }
 
     apic::Lapic::init(prcb.cpu_id as u8);
@@ -156,13 +156,13 @@ fn processor_setup_bsp(prcb: &'static mut Prcb) {
         asm::wrmsr(0xC0000080, msr | (1 << 0) as u64);
         asm::wrmsr(
             0xC0000081,
-            (0x20 - 16) << 48 | (gdt::SEL_KERNEL_CODE as u64) << 32,
+            (0x23 - 16) << 48 | (gdt::SEL_KERNEL_CODE as u64) << 32,
         );
         asm::wrmsr(
             0xC0000082,
             syscall_entry::amd64_syscall_stub as *const () as u64,
         );
-        asm::wrmsr(0xC0000084, 0);
+        asm::wrmsr(0xC0000084, 0xfffffffd);
     }
 
     apic::Lapic::init(prcb.cpu_id as u8);

@@ -19,6 +19,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "elf"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55dd888a213fc57e957abf2aa305ee3e8a28dbe05687a251f33b637cd46b0070"
+
+[[package]]
 name = "enum_dispatch"
 version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -67,6 +73,7 @@ name = "polaris"
 version = "2.0.0"
 dependencies = [
  "bitflags",
+ "elf",
  "enum_dispatch",
  "flanterm",
  "intrusive-collections",

@@ -5,3 +5,5 @@ limine.h
 /iso_root
 .DS_Store
 *.iso
+*.obj
+*.elf

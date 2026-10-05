@@ -38,6 +38,8 @@ pub static EXEC_ADDR: ExecutableAddressRequest = ExecutableAddressRequest::new()
 pub static RSDP: RsdpRequest = RsdpRequest::new();
 #[unsafe(link_section = ".requests")]
 pub static MP_REQUEST: MpRequest = MpRequest::new(1);
+#[unsafe(link_section = ".requests")]
+pub static MODULES_REQUEST: ModulesRequest = ModulesRequest::new();
 #[used]
 #[unsafe(link_section = ".requests_end")]
 pub static REQUESTS_END: RequestsEndMarker = RequestsEndMarker::new();

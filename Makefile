@@ -33,10 +33,10 @@ limine-binary/limine:
 		LDFLAGS="$(HOST_LDFLAGS)" \
 		LIBS="$(HOST_LIBS)"
 
-polaris.iso: limine-binary/limine kernel
+polaris.iso: limine-binary/limine kernel user
 	rm -rf iso_root
 	mkdir -p iso_root/boot
-	cp -v $(BUILDDIR)/polaris iso_root/boot/
+	cp -v $(BUILDDIR)/polaris user/user.elf iso_root/boot/
 	mkdir -p iso_root/boot/limine
 	cp -v limine.conf limine-binary/limine-bios.sys limine-binary/limine-bios-cd.bin limine-binary/limine-uefi-cd.bin iso_root/boot/limine/
 	mkdir -p iso_root/EFI/BOOT
@@ -59,3 +59,7 @@ kernel:
 		-Zbuild-std-features=compiler-builtins-mem \
 		--target=$(TARGET_JSON)
 	cp target/$(TARGET_NAME)/$(BUILDTYPE)/polaris $(BUILDDIR)/
+
+.PHONY: user
+user:
+	make -C user

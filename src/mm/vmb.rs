@@ -30,6 +30,28 @@ impl Vmb {
         }
     }
 
+    pub fn new_allocated_anon(size: usize) -> Self {
+        let v = Self {
+            size: align_up(size, PAGE_SIZE),
+            backing_type: VmbBacking::Anon,
+            pages: SpinLock::new(BTreeMap::new()),
+        };
+
+        {
+            let mut i = 0;
+            let mut pmm = PMM.lock();
+            let mut pages = v.pages.lock();
+            while i < size {
+                if let Some(page) = pmm.as_mut().unwrap().alloc(PageUsage::Anon) {
+                    pages.insert(i >> PAGE_SHIFT, page);
+                }
+                i += PAGE_SIZE;
+            }
+        }
+
+        v
+    }
+
     pub fn get_page(&self, off: usize) -> PxResult<u64> {
         if off > self.size {
             return Err(PxStatus::InvalidRange);
