@@ -1,4 +1,4 @@
-use crate::{arch::Context, fbcon, locks::spinlock::SpinLock};
+use crate::{arch::Context, fbcon, locks::spinlock::SpinLock, status_codes::PxStatus};
 use core::fmt::{Display, Formatter, FormattingOptions};
 
 pub struct DebugCon;
@@ -26,13 +26,18 @@ macro_rules! log {
     };
 }
 
-pub fn syscall_log(context: &mut Context) {
-    let string = context.get_first_arg() as *const i8;
-
+pub fn syscall_log(string: *const ()) -> PxStatus {
     if string.is_null() {
-        return;
+        return PxStatus::BufferTooSmall;
     }
 
-    let c_string = unsafe { core::ffi::CStr::from_ptr(string) };
-    log!("{}", c_string.to_str().unwrap());
+    let c_string = unsafe { core::ffi::CStr::from_ptr(string as *const i8) };
+    let str = match c_string.to_str() {
+        Ok(s) => s,
+        Err(e) => return PxStatus::Unsuccessful,
+    };
+
+    log!("{}", str);
+
+    PxStatus::Success
 }

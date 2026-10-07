@@ -1,4 +1,7 @@
 use super::vmb::Vmb;
+use crate::status_codes::PxResult;
+use crate::status_codes::PxStatus;
+use crate::syscall::FromArg;
 use alloc::sync::Arc;
 use bitflags::bitflags;
 
@@ -8,6 +11,13 @@ bitflags! {
         const READ     = 1 << 0;
         const WRITE    = 1 << 1;
         const EXECUTE  = 1 << 2;
+    }
+}
+
+impl FromArg for VarProtectionFlags {
+    fn from_arg(r: usize) -> PxResult<Self> {
+        let bits = i32::try_from(r).map_err(|_| PxStatus::InvalidArguments)?;
+        Self::from_bits(bits).ok_or(PxStatus::InvalidArguments)
     }
 }
 

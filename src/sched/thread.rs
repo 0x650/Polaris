@@ -2,10 +2,13 @@ use super::dispatch::{Dispatcher, DispatcherObject};
 use super::process::Process;
 use super::sched;
 use crate::mm::stack::*;
+use crate::object::handle;
+use crate::status_codes::PxStatus;
 use crate::{arch::Context, locks::spinlock::SpinLock};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::cell::UnsafeCell;
+use core::iter::OnceWith;
 use core::sync::atomic::{AtomicBool, AtomicI8, AtomicUsize, Ordering};
 use intrusive_collections::{KeyAdapter, RBTreeLink, UnsafeRef, intrusive_adapter};
 
@@ -149,4 +152,33 @@ impl Dispatcher for Thread {
 
 pub extern "C" fn idle_thread(_: usize) -> ! {
     loop {}
+}
+
+pub fn syscall_new_thread(process_handle: isize, ip: usize, sp: usize, arg: usize) -> PxStatus {
+    let process = handle::get_object(process_handle);
+
+    let process = match process {
+        Ok(p) => p,
+        Err(e) => {
+            return e;
+        }
+    };
+
+    let process = match process.as_process() {
+        Some(p) => p,
+        None => {
+            return PxStatus::TypeMismatch;
+        }
+    };
+
+    let new_thread = Thread::new(ip, sp, arg, process.clone());
+
+    let new_thread = match new_thread {
+        Some(t) => t,
+        None => return PxStatus::Unsuccessful,
+    };
+
+    sched::enqueue_thread(new_thread);
+
+    PxStatus::Success
 }

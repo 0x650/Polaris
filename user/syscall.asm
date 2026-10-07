@@ -6,6 +6,7 @@ global syscall3
 global syscall4
 global syscall5
 global syscall6
+global die
 
 syscall0:
 	mov rax, rdi
@@ -65,3 +66,6 @@ syscall6:
 	syscall
 	push r12
 	ret
+
+die:
+    ud2

@@ -67,12 +67,14 @@ pub fn get_current_processor() -> *mut Prcb {
     processor
 }
 
-pub fn get_running_thread() -> Option<&'static Thread> {
+pub fn get_running_thread() -> Option<Arc<Thread>> {
     let previous = unsafe { intr::toggle_interrupts(false) };
-    let prcb = unsafe { &mut *get_current_processor() };
-    let running_thread = prcb.running_thread.as_deref();
+    let thread = unsafe {
+        let prcb = get_current_processor();
+        (*prcb).running_thread.clone()
+    };
     unsafe { intr::toggle_interrupts(previous) };
-    running_thread
+    thread
 }
 
 pub fn halt_other_processors() {

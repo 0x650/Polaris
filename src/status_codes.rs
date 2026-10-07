@@ -15,6 +15,7 @@ pub enum PxStatus {
     PeerClosed = -9,
     ShouldWait = -10,
     BufferTooSmall = -11,
+    TypeMismatch = -12,
 }
 
 pub type PxResult<T> = Result<T, PxStatus>;

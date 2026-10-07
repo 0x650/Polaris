@@ -88,12 +88,17 @@ impl Context {
         self.rax = ret as u64
     }
 
-    pub fn set_first_arg(&mut self, arg: usize) {
-        self.rdi = arg as u64
-    }
-
-    pub fn get_first_arg(&self) -> usize {
-        self.rdi as usize
+    pub fn get_syscall_arg(&self, n: usize) -> usize {
+        let r = match n {
+            0 => self.rdi,
+            1 => self.rsi,
+            2 => self.rdx,
+            3 => self.r10,
+            4 => self.r8,
+            5 => self.r9,
+            _ => todo!(),
+        };
+        r as usize
     }
 
     pub fn get_syscall_nr(&self) -> usize {

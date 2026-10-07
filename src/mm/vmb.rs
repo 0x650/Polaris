@@ -1,14 +1,29 @@
 use super::phys::{self, PMM, PageUsage};
-use crate::arch::{PAGE_SHIFT, PAGE_SIZE};
+use crate::arch::{PAGE_SHIFT, PAGE_SIZE, get_running_thread};
 use crate::locks::spinlock::SpinLock;
+use crate::mm::var::VarProtectionFlags;
+use crate::object::KernelObject;
+use crate::object::handle::{self, Handle};
 use crate::status_codes::{PxResult, PxStatus};
+use crate::syscall::FromArg;
 use alloc::collections::BTreeMap;
+use alloc::sync::Arc;
 use core::result::Result;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum VmbBacking {
     Anon,
     Pager,
+}
+
+impl FromArg for VmbBacking {
+    fn from_arg(r: usize) -> PxResult<Self> {
+        match r {
+            0 => return Ok(VmbBacking::Anon),
+            1 => return Ok(VmbBacking::Pager),
+            _ => return Err(PxStatus::InvalidRange),
+        }
+    }
 }
 
 pub struct Vmb {
@@ -86,5 +101,74 @@ impl Drop for Vmb {
             pmm.as_mut().unwrap().free(*page);
         }
         pages.clear();
+    }
+}
+
+pub fn syscall_new_vmb(vmb_handle: *mut isize, length: usize, backing: VmbBacking) -> PxStatus {
+    let running_proc = get_running_thread().unwrap().mother_proc.clone();
+
+    if vmb_handle.is_null() {
+        return PxStatus::BufferTooSmall;
+    }
+
+    let mut table = running_proc.handle_table.lock();
+    let handle = table.insert(Handle::new(KernelObject::Vmb(Arc::new(Vmb::new(
+        length, backing,
+    )))));
+
+    unsafe {
+        *vmb_handle = handle;
+    }
+
+    PxStatus::Success
+}
+
+pub fn syscall_map_vmb(
+    process_handle: isize,
+    vmb_handle: isize,
+    base: usize,
+    length: usize,
+    protections: VarProtectionFlags,
+) -> PxStatus {
+    let process = handle::get_object(process_handle);
+
+    let process = match process {
+        Ok(p) => p,
+        Err(e) => {
+            return e;
+        }
+    };
+
+    let process = match process.as_process() {
+        Some(p) => p,
+        None => {
+            return PxStatus::TypeMismatch;
+        }
+    };
+
+    let vmb = handle::get_object(vmb_handle);
+
+    let vmb = match vmb {
+        Ok(v) => v,
+        Err(e) => {
+            return e;
+        }
+    };
+
+    let vmb = match vmb.as_vmb() {
+        Some(v) => v,
+        None => {
+            return PxStatus::TypeMismatch;
+        }
+    };
+
+    let mut address_space = process.address_space.lock();
+    match address_space.insert_var_range(base as u64, length, protections, vmb.clone()) {
+        Ok(()) => {
+            return PxStatus::Success;
+        }
+        Err(e) => {
+            return e;
+        }
     }
 }
