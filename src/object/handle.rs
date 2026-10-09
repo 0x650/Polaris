@@ -62,3 +62,7 @@ pub fn get_object(handle_id: isize) -> PxResult<KernelObject> {
     };
     Ok(object)
 }
+
+pub fn get_object_as<T: TryFrom<KernelObject, Error = PxStatus>>(handle_id: isize) -> PxResult<T> {
+    T::try_from(get_object(handle_id)?)
+}

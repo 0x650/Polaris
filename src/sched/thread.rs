@@ -1,10 +1,12 @@
 use super::dispatch::{Dispatcher, DispatcherObject};
 use super::process::Process;
 use super::sched;
+use crate::arch::{Context, get_running_thread};
+use crate::locks::spinlock::SpinLock;
 use crate::mm::stack::*;
-use crate::object::handle;
-use crate::status_codes::PxStatus;
-use crate::{arch::Context, locks::spinlock::SpinLock};
+use crate::object::KernelObject;
+use crate::object::handle::{self, Handle};
+use crate::status_codes::{PxResult, PxStatus};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::cell::UnsafeCell;
@@ -154,20 +156,23 @@ pub extern "C" fn idle_thread(_: usize) -> ! {
     loop {}
 }
 
-pub fn syscall_new_thread(process_handle: isize, ip: usize, sp: usize, arg: usize) -> PxStatus {
-    let process = handle::get_object(process_handle);
+pub fn syscall_new_thread(
+    process_handle: isize,
+    thread_handle: *mut isize,
+    ip: usize,
+    sp: usize,
+    arg: usize,
+) -> PxStatus {
+    if thread_handle.is_null() {
+        return PxStatus::BufferTooSmall;
+    }
 
-    let process = match process {
+    let running_proc = get_running_thread().unwrap().mother_proc.clone();
+
+    let process = match handle::get_object_as::<Arc<Process>>(process_handle) {
         Ok(p) => p,
         Err(e) => {
             return e;
-        }
-    };
-
-    let process = match process.as_process() {
-        Some(p) => p,
-        None => {
-            return PxStatus::TypeMismatch;
         }
     };
 
@@ -178,7 +183,23 @@ pub fn syscall_new_thread(process_handle: isize, ip: usize, sp: usize, arg: usiz
         None => return PxStatus::Unsuccessful,
     };
 
+    let mut handle_table = running_proc.handle_table.lock();
+    let th = handle_table.insert(Handle::new(KernelObject::Thread(new_thread.clone())));
+
+    unsafe {
+        *thread_handle = th;
+    }
+
     sched::enqueue_thread(new_thread);
 
+    PxStatus::Success
+}
+
+pub fn syscall_terminate_thread() -> PxStatus {
+    {
+        let running_thread = get_running_thread().unwrap();
+        running_thread.terminate();
+    }
+    unreachable!();
     PxStatus::Success
 }

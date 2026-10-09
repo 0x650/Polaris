@@ -3,7 +3,8 @@ use super::sched;
 use super::thread::{Thread, ThreadState};
 use crate::arch;
 use crate::locks::mutex::KMutex;
-use crate::status_codes::PxStatus;
+use crate::object::{KernelObject, handle};
+use crate::status_codes::{PxResult, PxStatus};
 use alloc::sync::Arc;
 use core::result::Result;
 use core::sync::atomic::{AtomicBool, Ordering};
@@ -50,32 +51,13 @@ pub enum DispatcherObject {
     Mutex(Arc<KMutex>),
 }
 
-impl DispatcherObject {
-    pub fn as_event(&self) -> Option<Arc<Event>> {
-        match self {
-            DispatcherObject::Event(ev) => Some(ev.clone()),
-            _ => None,
-        }
-    }
-
-    pub fn as_thread(&self) -> Option<Arc<Thread>> {
-        match self {
-            DispatcherObject::Thread(t) => Some(t.clone()),
-            _ => None,
-        }
-    }
-
-    pub fn as_process(&self) -> Option<Arc<Process>> {
-        match self {
-            DispatcherObject::Process(p) => Some(p.clone()),
-            _ => None,
-        }
-    }
-
-    pub fn as_mutex(&self) -> Option<Arc<KMutex>> {
-        match self {
-            DispatcherObject::Mutex(m) => Some(m.clone()),
-            _ => None,
+impl From<DispatcherObject> for KernelObject {
+    fn from(d: DispatcherObject) -> Self {
+        match d {
+            DispatcherObject::Event(e) => KernelObject::Event(e),
+            DispatcherObject::Thread(t) => KernelObject::Thread(t),
+            DispatcherObject::Process(p) => KernelObject::Process(p),
+            DispatcherObject::Mutex(m) => KernelObject::Mutex(m),
         }
     }
 }
@@ -147,4 +129,26 @@ pub fn wait_on_multiple_objects(
     };
 
     Ok(obj)
+}
+
+pub fn syscall_wait_on_single_object(handle: isize, timeout: usize) -> PxStatus {
+    let running_proc = arch::get_running_thread().unwrap().mother_proc.clone();
+
+    let object = match handle::get_object_as::<Arc<DispatcherObject>>(handle) {
+        Ok(o) => o,
+        Err(e) => {
+            return e;
+        }
+    };
+
+    wait_on_single_object(object, timeout)
+}
+
+pub fn syscall_wait_on_multiple_objects(
+    handles: *const isize,
+    number_of_handles: usize,
+    wait_all: bool,
+    timeout: usize,
+) -> PxStatus {
+    PxStatus::Unsuccessful
 }

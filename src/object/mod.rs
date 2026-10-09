@@ -2,9 +2,10 @@ pub mod handle;
 
 use crate::locks::mutex::KMutex;
 use crate::mm::vmb::Vmb;
-use crate::sched::dispatch::Event;
+use crate::sched::dispatch::{DispatcherObject, Event};
 use crate::sched::process::Process;
 use crate::sched::thread::Thread;
+use crate::status_codes::PxStatus;
 use alloc::sync::Arc;
 
 #[derive(Clone)]
@@ -16,38 +17,40 @@ pub enum KernelObject {
     Vmb(Arc<Vmb>),
 }
 
-impl KernelObject {
-    pub fn as_event(&self) -> Option<Arc<Event>> {
-        match self {
-            KernelObject::Event(ev) => Some(ev.clone()),
-            _ => None,
+macro_rules! kernel_object_conv {
+    ($($variant:ident($ty:ty)),* $(,)?) => {$(
+        impl From<Arc<$ty>> for KernelObject {
+            fn from(v: Arc<$ty>) -> Self { KernelObject::$variant(v) }
         }
-    }
+        impl TryFrom<KernelObject> for Arc<$ty> {
+            type Error = PxStatus;
+            fn try_from(o: KernelObject) -> Result<Self, PxStatus> {
+                match o {
+                    KernelObject::$variant(v) => Ok(v),
+                    _ => Err(PxStatus::TypeMismatch),
+                }
+            }
+        }
+    )*};
+}
 
-    pub fn as_thread(&self) -> Option<Arc<Thread>> {
-        match self {
-            KernelObject::Thread(t) => Some(t.clone()),
-            _ => None,
-        }
-    }
+kernel_object_conv!(
+    Event(Event),
+    Thread(Thread),
+    Process(Process),
+    Mutex(KMutex),
+    Vmb(Vmb),
+);
 
-    pub fn as_process(&self) -> Option<Arc<Process>> {
-        match self {
-            KernelObject::Process(p) => Some(p.clone()),
-            _ => None,
-        }
-    }
-
-    pub fn as_mutex(&self) -> Option<Arc<KMutex>> {
-        match self {
-            KernelObject::Mutex(m) => Some(m.clone()),
-            _ => None,
-        }
-    }
-    pub fn as_vmb(&self) -> Option<Arc<Vmb>> {
-        match self {
-            KernelObject::Vmb(v) => Some(v.clone()),
-            _ => None,
+impl TryFrom<KernelObject> for Arc<DispatcherObject> {
+    type Error = PxStatus;
+    fn try_from(o: KernelObject) -> Result<Self, PxStatus> {
+        match o {
+            KernelObject::Event(e) => Ok(DispatcherObject::Event(e.clone()).into()),
+            KernelObject::Thread(t) => Ok(DispatcherObject::Thread(t.clone()).into()),
+            KernelObject::Process(p) => Ok(DispatcherObject::Process(p.clone()).into()),
+            KernelObject::Mutex(m) => Ok(DispatcherObject::Mutex(m.clone()).into()),
+            KernelObject::Vmb(_) => Err(PxStatus::TypeMismatch),
         }
     }
 }

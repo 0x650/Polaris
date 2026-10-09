@@ -4,6 +4,7 @@ use crate::locks::spinlock::SpinLock;
 use crate::mm::var::VarProtectionFlags;
 use crate::object::KernelObject;
 use crate::object::handle::{self, Handle};
+use crate::sched::process::Process;
 use crate::status_codes::{PxResult, PxStatus};
 use crate::syscall::FromArg;
 use alloc::collections::BTreeMap;
@@ -130,35 +131,17 @@ pub fn syscall_map_vmb(
     length: usize,
     protections: VarProtectionFlags,
 ) -> PxStatus {
-    let process = handle::get_object(process_handle);
-
-    let process = match process {
+    let process = match handle::get_object_as::<Arc<Process>>(process_handle) {
         Ok(p) => p,
         Err(e) => {
             return e;
         }
     };
 
-    let process = match process.as_process() {
-        Some(p) => p,
-        None => {
-            return PxStatus::TypeMismatch;
-        }
-    };
-
-    let vmb = handle::get_object(vmb_handle);
-
-    let vmb = match vmb {
+    let vmb = match handle::get_object_as::<Arc<Vmb>>(vmb_handle) {
         Ok(v) => v,
         Err(e) => {
             return e;
-        }
-    };
-
-    let vmb = match vmb.as_vmb() {
-        Some(v) => v,
-        None => {
-            return PxStatus::TypeMismatch;
         }
     };
 

@@ -7,3 +7,4 @@ limine.h
 *.iso
 *.obj
 *.elf
+*.o

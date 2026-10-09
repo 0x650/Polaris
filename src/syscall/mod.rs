@@ -88,7 +88,9 @@ impl_syscall_fn!(0 A, 1 B, 2 C, 3 D);
 impl_syscall_fn!(0 A, 1 B, 2 C, 3 D, 4 E);
 impl_syscall_fn!(0 A, 1 B, 2 C, 3 D, 4 E, 5 G);
 
-pub const SYSLOG: usize = 0;
-pub const NEW_THREAD: usize = 1;
-pub const NEW_VMB: usize = 2;
-pub const MAP_VMB: usize = 3;
+pub const SYSLOG: usize = 1;
+pub const WAIT_FOR_SINGLE_OBJECT: usize = 2;
+pub const NEW_THREAD: usize = 3;
+pub const TERMINATE_THREAD: usize = 4;
+pub const NEW_VMB: usize = 5;
+pub const MAP_VMB: usize = 6;
