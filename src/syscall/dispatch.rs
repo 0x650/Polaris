@@ -17,6 +17,9 @@ pub fn dispatch(context: &mut Context) {
         super::WAIT_FOR_SINGLE_OBJECT => {
             run(sched::dispatch::syscall_wait_on_single_object, context)
         }
+        super::WAIT_FOR_MULTIPLE_OBJECTS => {
+            run(sched::dispatch::syscall_wait_on_multiple_objects, context)
+        }
         super::NEW_THREAD => run(thread::syscall_new_thread, context),
         super::TERMINATE_THREAD => run(thread::syscall_terminate_thread, context),
         super::NEW_VMB => run(vmb::syscall_new_vmb, context),

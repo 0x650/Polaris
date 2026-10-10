@@ -43,6 +43,12 @@ impl FromArg for i64 {
     }
 }
 
+impl FromArg for bool {
+    fn from_arg(r: usize) -> PxResult<Self> {
+        Ok(if r != 0 { true } else { false })
+    }
+}
+
 impl<T> FromArg for *const T {
     fn from_arg(r: usize) -> PxResult<Self> {
         Ok(r as *const T)
@@ -90,7 +96,8 @@ impl_syscall_fn!(0 A, 1 B, 2 C, 3 D, 4 E, 5 G);
 
 pub const SYSLOG: usize = 1;
 pub const WAIT_FOR_SINGLE_OBJECT: usize = 2;
-pub const NEW_THREAD: usize = 3;
-pub const TERMINATE_THREAD: usize = 4;
-pub const NEW_VMB: usize = 5;
-pub const MAP_VMB: usize = 6;
+pub const WAIT_FOR_MULTIPLE_OBJECTS: usize = 3;
+pub const NEW_THREAD: usize = 4;
+pub const TERMINATE_THREAD: usize = 5;
+pub const NEW_VMB: usize = 6;
+pub const MAP_VMB: usize = 7;

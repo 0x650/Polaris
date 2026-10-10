@@ -19,7 +19,7 @@ $(eval $(call DEFAULT_VAR,LDFLAGS,$(DEFAULT_LDFLAGS)))
 
 LDFLAGS := -Tlinker.ld
 NASMFLAGS := -felf64
-CFLAGS := -ffreestanding -mno-red-zone -Os -pipe -Wall -Wextra -std=gnu11
+CFLAGS := -ffreestanding -mno-red-zone -Os -pipe -Wall -Wextra -std=gnu11 -mno-sse -mno-sse2
 
 .PHONY: all
 all: user

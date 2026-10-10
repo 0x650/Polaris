@@ -6,7 +6,9 @@ use crate::locks::mutex::KMutex;
 use crate::object::{KernelObject, handle};
 use crate::status_codes::{PxResult, PxStatus};
 use alloc::sync::Arc;
+use alloc::vec::Vec;
 use core::result::Result;
+use core::slice::from_raw_parts;
 use core::sync::atomic::{AtomicBool, Ordering};
 use enum_dispatch::enum_dispatch;
 
@@ -149,6 +151,42 @@ pub fn syscall_wait_on_multiple_objects(
     number_of_handles: usize,
     wait_all: bool,
     timeout: usize,
+    triggered_handle: *mut isize,
 ) -> PxStatus {
-    PxStatus::Unsuccessful
+    if handles.is_null() {
+        return PxStatus::Unsuccessful;
+    }
+
+    if triggered_handle.is_null() {
+        return PxStatus::BufferTooSmall;
+    }
+
+    let handles_as_slice = unsafe { core::slice::from_raw_parts(handles, number_of_handles) };
+    let mut objects = Vec::with_capacity(number_of_handles);
+
+    for handle in handles_as_slice {
+        let object = match handle::get_object_as::<Arc<DispatcherObject>>(*handle) {
+            Ok(o) => o,
+            Err(e) => return e,
+        };
+        objects.push(object);
+    }
+
+    let triggered_object = match wait_on_multiple_objects(objects.as_slice(), wait_all, timeout) {
+        Ok(o) => o,
+        Err(e) => return e,
+    };
+
+    match objects
+        .iter()
+        .position(|o| Arc::ptr_eq(o, &triggered_object))
+    {
+        Some(index) => {
+            unsafe {
+                *triggered_handle = handles_as_slice[index];
+            }
+            PxStatus::Success
+        }
+        None => PxStatus::Unsuccessful,
+    }
 }

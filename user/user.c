@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
@@ -35,10 +36,11 @@ typedef int64_t handle_t;
 
 #define PX_LOG 1
 #define PX_WAIT_FOR_SINGLE_OBJECT 2
-#define PX_NEW_THREAD 3
-#define PX_TERMINATE_THREAD 4
-#define PX_NEW_VMB 5
-#define PX_MAP_VMB 6
+#define PX_WAIT_FOR_MULTIPLE_OBJECTS 3
+#define PX_NEW_THREAD 4
+#define PX_TERMINATE_THREAD 5
+#define PX_NEW_VMB 6
+#define PX_MAP_VMB 7
 
 pxstatus_t px_log(const char *string) {
   return syscall1(PX_LOG, (uintptr_t)string);
@@ -78,6 +80,15 @@ pxstatus_t px_wait_for_single_object(handle_t object, size_t timeout) {
   return syscall2(PX_WAIT_FOR_SINGLE_OBJECT, object, timeout);
 }
 
+pxstatus_t px_wait_for_multiple_objects(handle_t *objects,
+                                        size_t number_of_objects, bool wait_all,
+                                        size_t timeout,
+                                        handle_t *triggered_object) {
+  return syscall5(PX_WAIT_FOR_MULTIPLE_OBJECTS, (uintptr_t)objects,
+                  number_of_objects, wait_all, timeout,
+                  (uintptr_t)triggered_object);
+}
+
 #define RANDOM_ADDRESS 0x70000000000ULL
 
 #define px_current_process() -1
@@ -85,48 +96,58 @@ pxstatus_t px_wait_for_single_object(handle_t object, size_t timeout) {
 
 extern void die(size_t err);
 
-void funny_thread(char *str) {
-  px_log("Hello I am the funny thread!\r\n");
-  px_log("I got ");
-  px_log(str);
-  px_log("\r\n");
+void test_thread(uint64_t t) {
+  char message[] = "Hello I am thread 0!\r\n";
+  message[18] = '0' + (char)t;
+  px_log(message);
 
   px_terminate_thread();
 }
 
 void _start(void) {
   px_log("Hello from userspace!\r\n");
-  px_log("Creating a new thread\r\n");
+  px_log("Spawning 4 threads\r\n");
 
-  handle_t stack_vmb_handle = 0;
-  pxstatus_t status = px_new_vmb(&stack_vmb_handle, 4096, Anon);
+  handle_t thread_handles[4] = {0};
+
+  uintptr_t stack_ptr = RANDOM_ADDRESS;
+  pxstatus_t status = Success;
+
+  for (int i = 0; i < 4; i++) {
+    handle_t stack_vmb_handle = 0;
+    px_new_vmb(&stack_vmb_handle, 4096, Anon);
+
+    if (status != Success) {
+      px_log("Failed to create stack vmb :(\r\n");
+      die(status);
+    }
+    status =
+        px_map_vmb(px_current_process(), stack_vmb_handle, stack_ptr - 4096,
+                   4096, VAR_FLAGS_READ | VAR_FLAGS_WRITE);
+
+    if (status != Success) {
+      px_log("Failed to map stack vmb :(\r\n");
+      die(status);
+    }
+
+    status =
+        px_new_thread(px_current_process(), &thread_handles[i], test_thread,
+                      (void *)stack_ptr, (void *)(uintptr_t)i);
+    if (status != Success) {
+      px_log("Failed to create thread :(\r\n");
+      die(status);
+    }
+
+    stack_ptr -= 4096 * 2;
+  }
+
+  handle_t triggered_thread = 0;
+  status = px_wait_for_multiple_objects(
+      thread_handles, 4, true, WAIT_TIMEOUT_INFINITE, &triggered_thread);
 
   if (status != Success) {
-    px_log("Failed to create stack vmb :(\r\n");
+    px_log("Failed to wait on threads :(\r\n");
     die(status);
-  }
-
-  status =
-      px_map_vmb(px_current_process(), stack_vmb_handle, RANDOM_ADDRESS - 4096,
-                 4096, VAR_FLAGS_READ | VAR_FLAGS_WRITE);
-
-  if (status != Success) {
-    px_log("Failed to map stack vmb :(\r\n");
-    die(status);
-  }
-
-  handle_t thread_handle = 0;
-  status = px_new_thread(px_current_process(), &thread_handle, funny_thread,
-                         (void *)RANDOM_ADDRESS, "0x650");
-
-  if (status != Success) {
-    px_log("Failed to create thread :(\r\n");
-  }
-
-  status = px_wait_for_single_object(thread_handle, WAIT_TIMEOUT_INFINITE);
-
-  if (status != Success) {
-    px_log("Failed to wait on thread :(\r\n");
   } else {
     px_log("Done!\r\n");
   }
